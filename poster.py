@@ -159,7 +159,7 @@ class RedditPoster:
             success, comment_url, error_message = await self.post_reply(post['id'], reply_text)
             
             # Log the activity to Neon DB
-            await self.db.log_post(
+            self.db.log_post(
                 post_id=post['id'],
                 subreddit=post['subreddit'],
                 title=post['title'],
@@ -182,7 +182,7 @@ class RedditPoster:
     async def run(self):
         """Main run loop"""
         logger.info("Starting Reddit poster service...")
-        await self.db.connect() # Connect to Neon DB at startup
+        self.db.connect() # Connect to Neon DB at startup
         
         while True:
             try:
@@ -192,7 +192,7 @@ class RedditPoster:
                 logger.error(f"Poster error: {e}")
                 await asyncio.sleep(30)
         
-        await self.db.close()
+        self.db.close()
 
 async def main():
     poster = RedditPoster()
