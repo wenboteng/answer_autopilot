@@ -25,6 +25,8 @@ services:
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python listener.py"
     envVars:
+      - key: RENDER_CACHE_CLEAR
+        value: "true"
       - fromGroup: reddit-creds
       - key: REDIS_URL
         fromService:
@@ -40,6 +42,8 @@ services:
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python reply.py"
     envVars:
+      - key: RENDER_CACHE_CLEAR
+        value: "true"
       - fromGroup: reddit-creds
       - key: REDIS_URL
         fromService:
@@ -55,6 +59,8 @@ services:
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python poster.py"
     envVars:
+      - key: RENDER_CACHE_CLEAR
+        value: "true"
       - fromGroup: reddit-creds
       - key: REDIS_URL
         fromService:
