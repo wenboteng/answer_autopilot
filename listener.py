@@ -34,14 +34,13 @@ class RedditListener:
             refresh_token=Config.REDDIT_REFRESH_TOKEN,
             user_agent=Config.REDDIT_USER_AGENT
         )
-        with open('config.yaml', 'r') as f:
-            self.config = yaml.safe_load(f)
-        
+        self.target_subreddits = Config.TARGET_SUBREDDITS
         self.redis = redis.Redis.from_url(
             os.getenv('REDIS_URL', 'redis://localhost:6379'),
             decode_responses=True
         )
         logger.info("Connected to Redis for queuing.")
+        logger.info(f"Monitoring subreddits: {', '.join(self.target_subreddits)}")
 
     def is_relevant(self, text: str) -> bool:
         """
@@ -54,7 +53,7 @@ class RedditListener:
     
     async def stream_posts(self):
         """Stream new posts from target subreddits."""
-        subreddits_str = "+".join(self.config['subreddits'])
+        subreddits_str = "+".join(self.target_subreddits)
         subreddit = await self.reddit.subreddit(subreddits_str)
         logger.info(f"Streaming posts from: r/{subreddits_str}")
 
