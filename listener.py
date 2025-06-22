@@ -86,7 +86,7 @@ class RedditListener:
                         logger.info(f"Queued post {post.id} for reply generation.")
                     
                     # Mark post as processed with a 7-day expiry to keep Redis clean
-                    self.redis.set(redis_key, 1, ex=timedelta(days=7).total_seconds())
+                    self.redis.set(redis_key, 1, ex=int(timedelta(days=7).total_seconds()))
 
                 logger.info(f"Finished check. Processed {post_count} posts, found {relevant_count} relevant.")
                 
