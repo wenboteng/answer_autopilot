@@ -1,0 +1,66 @@
+# OTA Forum Auto-Reply System Configuration
+
+# Reddit Configuration
+reddit:
+  target_subreddits:
+    - "TourGuide"
+    - "AirbnbHosts" 
+    - "SmallBusiness"
+    - "AskReddit"
+  
+  # OTA Keywords for filtering
+  keywords:
+    - "gyg"
+    - "getyourguide"
+    - "viator"
+    - "airbnb"
+    - "booking.com"
+    - "payout"
+    - "support"
+    - "vendor"
+    - "confirmation"
+    - "email"
+    - "cancel"
+    - "refund"
+    - "host"
+    - "guest"
+    - "reservation"
+    - "booking"
+    - "trip"
+    - "travel"
+    - "tourism"
+    - "accommodation"
+    - "property"
+    - "listing"
+
+# API Configuration
+api:
+  openai:
+    model: "gpt-4o-mini"
+    temperature: 0.7
+    max_tokens: 160
+  
+  reddit:
+    max_comments_per_hour: 3
+    min_karma_for_unlimited: 500
+    sleep_range: [15, 90]  # seconds
+
+# Redis Configuration
+redis:
+  host: "localhost"
+  port: 6379
+  db: 0
+  ttl_days: 30
+
+# Safety Configuration
+safety:
+  dry_run: false
+  content_moderation: true
+  max_replies_per_day: 10
+
+# Tool Configuration
+tool:
+  url: "https://gygsearch.io"
+  utm_source: "reddit"
+  utm_medium: "comment"
+  utm_campaign: "helpbot" 

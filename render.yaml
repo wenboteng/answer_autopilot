@@ -1,0 +1,91 @@
+# render.yaml
+# Blueprint for deploying the OTA Forum Auto-Reply System on Render
+
+# 1. Redis Instance
+# We start by defining a Redis instance for our services to use for queuing.
+databases:
+  - name: redis-ota-bot
+    databaseName: ota_bot_db  # This is for Render's internal use
+    ipAllowList: [] # Allow access from anywhere, Render services are secure
+    plan: free # Use the free tier for the MVP
+
+# 2. Services
+# These are the background workers that make up our bot.
+services:
+  # The Listener service monitors Reddit for new posts.
+  - type: redis
+    name: redis-cache
+    ipAllowList: [] # No IP allow list, accessible from all services
+    plan: free
+
+  - type: worker
+    name: listener
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python listener.py"
+    envVars:
+      - fromGroup: reddit-creds
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: redis-cache
+          property: connectionString
+
+  # The Reply Generator service creates responses using OpenAI.
+  - type: worker
+    name: reply
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python reply.py"
+    envVars:
+      - fromGroup: reddit-creds
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: redis-cache
+          property: connectionString
+
+  # The Poster service posts the generated replies back to Reddit.
+  - type: worker
+    name: poster
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python poster.py"
+    envVars:
+      - fromGroup: reddit-creds
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: redis-cache
+          property: connectionString
+
+# 3. Environment Group
+# This group stores our secret API keys securely.
+# You will need to add these in the Render dashboard.
+envVarGroups:
+  - name: reddit-creds
+    envVars:
+      - key: REDDIT_CLIENT_ID
+        value: "your_reddit_client_id_here"
+      - key: REDDIT_CLIENT_SECRET
+        value: "your_reddit_client_secret_here"
+      - key: REDDIT_USER_AGENT
+        value: "OTA Bot by u/your_reddit_username"
+      - key: REDDIT_USERNAME
+        value: "your_reddit_username"
+      - key: REDDIT_PASSWORD
+        value: "your_reddit_password"
+      - key: REDDIT_REFRESH_TOKEN
+        value: "your_reddit_refresh_token_here"
+      - key: NEON_DATABASE_URL
+        value: "your_neon_database_url_here"
+  - name: ota-bot-secrets
+    envVars:
+      - key: REDDIT_CLIENT_ID
+        value: _o7FfYbqvD_nNzB0ssDQuA
+      - key: REDDIT_CLIENT_SECRET
+        value: PXQ83_VBCV02-g8LbqM9SfOjMLARew
+      - key: REDDIT_REFRESH_TOKEN
+        value: 489705744940-PzmCvyj8v1jCZ8c8zOagWUFHawyYxA
+      - key: PYTHON_VERSION
+        value: 3.11.5 
