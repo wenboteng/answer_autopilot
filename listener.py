@@ -6,7 +6,7 @@ import logging
 import redis
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from config import Config
 
@@ -51,43 +51,52 @@ class RedditListener:
         hits = sum(bool(p.search(text)) for p in BRAND_PATTERNS)
         return hits > 0
     
-    async def stream_posts(self):
-        """Stream new posts from target subreddits."""
+    async def run(self):
+        """Main run loop for the listener, polls for new posts."""
+        logger.info("Starting Reddit listener service...")
         subreddits_str = "+".join(self.target_subreddits)
         subreddit = await self.reddit.subreddit(subreddits_str)
-        logger.info(f"Streaming posts from: r/{subreddits_str}")
 
-        try:
-            async for post in subreddit.stream.submissions(skip_existing=True):
-                full_text = f"{post.title} {post.selftext}"
-
-                if self.is_relevant(full_text):
-                    logger.info(f"Found relevant post: '{post.title[:50]}...' in r/{post.subreddit.display_name}")
-                    post_data = {
-                        'id': post.id,
-                        'title': post.title,
-                        'content': post.selftext,
-                        'subreddit': post.subreddit.display_name,
-                        'url': post.url,
-                        'created_utc': post.created_utc
-                    }
-                    # Push to Redis queue
-                    self.redis.lpush("posts_to_reply", json.dumps(post_data))
-                    logger.info(f"Queued post {post.id} to Redis for reply generation.")
-
-        except Exception as e:
-            logger.error(f"Error in post stream: {e}", exc_info=True)
-            await asyncio.sleep(60)
-    
-    async def run(self):
-        """Main run loop for the listener"""
-        logger.info("Starting Reddit listener service...")
         while True:
             try:
-                await self.stream_posts()
+                logger.info(f"❤️ Heartbeat: Checking for new posts in r/{subreddits_str}...")
+                post_count = 0
+                relevant_count = 0
+
+                async for post in subreddit.new(limit=25):
+                    post_count += 1
+                    redis_key = f"processed_post:{post.id}"
+
+                    if self.redis.exists(redis_key):
+                        continue
+
+                    full_text = f"{post.title} {post.selftext}"
+                    if self.is_relevant(full_text):
+                        relevant_count += 1
+                        logger.info(f"Found relevant post: '{post.title[:50]}...' in r/{post.subreddit.display_name}")
+                        post_data = {
+                            'id': post.id,
+                            'title': post.title,
+                            'content': post.selftext,
+                            'subreddit': post.subreddit.display_name,
+                            'url': post.url,
+                            'created_utc': post.created_utc
+                        }
+                        self.redis.lpush("posts_to_reply", json.dumps(post_data))
+                        logger.info(f"Queued post {post.id} for reply generation.")
+                    
+                    # Mark post as processed with a 7-day expiry to keep Redis clean
+                    self.redis.set(redis_key, 1, ex=timedelta(days=7).total_seconds())
+
+                logger.info(f"Finished check. Processed {post_count} posts, found {relevant_count} relevant.")
+                
+                # Wait for 5 minutes before the next poll
+                logger.info("Sleeping for 5 minutes...")
+                await asyncio.sleep(300)
+
             except Exception as e:
-                logger.error(f"Listener stream encountered a fatal error: {e}", exc_info=True)
-                logger.info("Restarting stream after a 60 second delay...")
+                logger.error(f"Listener loop encountered an error: {e}", exc_info=True)
+                logger.info("Restarting loop after a 60 second delay...")
                 await asyncio.sleep(60)
 
 async def main():
