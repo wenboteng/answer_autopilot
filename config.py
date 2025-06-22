@@ -22,18 +22,9 @@ class Config:
     # Database Configuration
     DATABASE_PATH = os.getenv('DATABASE_PATH', 'ota_forum_bot.db')
     
-    # OTA Keywords for filtering posts
-    OTA_KEYWORDS = [
-        'viator', 'getyourguide', 'airbnb', 'booking.com', 'payout', 
-        'support', 'vendor', 'confirmation', 'email', 'cancel', 'refund',
-        'host', 'guest', 'reservation', 'booking', 'trip', 'travel',
-        'tourism', 'accommodation', 'property', 'listing'
-    ]
-    
     # Target subreddits
     TARGET_SUBREDDITS = [
-        'airbnb_hosts', 'travel', 'tourism', 'airbnb', 'booking',
-        'travelagents', 'hospitality', 'hotels'
+        "TourGuide", "AirbnbHosts", "TravelIndustry", "Arival", "tour_operator"
     ]
     
     # Tool URL
@@ -44,7 +35,7 @@ class Config:
         """Validate that all required configuration is present"""
         required_vars = [
             'REDDIT_CLIENT_ID', 'REDDIT_CLIENT_SECRET', 
-            'REDDIT_REFRESH_TOKEN', 'OPENAI_API_KEY'
+            'REDDIT_REFRESH_TOKEN'
         ]
         
         missing_vars = []
