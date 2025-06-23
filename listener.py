@@ -17,12 +17,35 @@ load_dotenv()
 logging.basicConfig(level=Config.LOG_LEVEL, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger(__name__)
 
-# Compile regex patterns for efficiency
+# --- New High-Precision Filtering Logic ---
+
+# Context keywords identify the post as being from a vendor or about a vendor issue.
+CONTEXT_WORDS = [
+    # General Problems & Questions
+    "problem", "issue", "question", "help", "support", "trouble", "error",
+    # Vendor Identity
+    "supplier", "vendor", "operator", "partner", "guide", "host",
+    # Business & Technical Terms
+    "payout", "commission", "ranking", "api", "search", "visibility", "fee",
+    "account", "listing", "booking", "review", "payment"
+]
+CONTEXT_REGEX = "|".join(CONTEXT_WORDS)
+
+# Compile regex patterns for efficiency.
+# Each pattern requires a platform brand AND a context word.
 BRAND_PATTERNS = [
-    re.compile(r"(gyg|get ?your ?guide).*(payout|commission|ranking|api|search)", re.IGNORECASE),
-    re.compile(r"viator.*(payout|commission|ranking|api|search)", re.IGNORECASE),
-    re.compile(r"airbnb (experience|experiences).*(host fee|ranking|visibility|api)", re.IGNORECASE),
-    re.compile(r"booking\.com.*(experiences|tours).*(ranking|visibility|api)", re.IGNORECASE),
+    # Matches (GYG or Viator) followed by any of the context words.
+    re.compile(fr"(gyg|get ?your ?guide|viator).*(?:{CONTEXT_REGEX})", re.IGNORECASE),
+    
+    # Matches (Airbnb Experience) followed by any of the context words.
+    re.compile(fr"airbnb (?:experience|experiences).*(?:{CONTEXT_REGEX})", re.IGNORECASE),
+
+    # Matches (Booking.com + Experience/Tour) followed by any of the context words.
+    re.compile(fr"booking\.com.*(?:experience|tour).*(?:{CONTEXT_REGEX})", re.IGNORECASE),
+
+    # Catches cases where the context word appears before the brand.
+    # e.g., "As a supplier, I have a problem with GetYourGuide."
+    re.compile(fr"(?:{CONTEXT_REGEX}).*(gyg|get ?your ?guide|viator|airbnb|booking\.com)", re.IGNORECASE)
 ]
 
 class RedditListener:
