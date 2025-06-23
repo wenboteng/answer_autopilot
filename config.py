@@ -22,9 +22,12 @@ class Config:
     # Database Configuration
     DATABASE_PATH = os.getenv('DATABASE_PATH', 'ota_forum_bot.db')
     
-    # Target subreddits
+    # Target subreddits (expanded for better coverage)
     TARGET_SUBREDDITS = [
-        "TourGuide", "AirbnbHosts", "TravelIndustry", "Arival", "tour_operator"
+        "TourGuide", "AirbnbHosts", "TravelIndustry", "Arival", "tour_operator",
+        "SmallBusiness", "Entrepreneur", "DigitalMarketing", "SEO", "Marketing",
+        "Travel", "SoloTravel", "Backpacking", "Hosting", "PropertyManagement",
+        "CustomerService", "Business", "Startups", "Freelance", "SideHustle"
     ]
     
     # Tool URL

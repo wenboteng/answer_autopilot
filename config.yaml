@@ -33,6 +33,42 @@ reddit:
     - "property"
     - "listing"
 
+# Airbnb Community Center Configuration
+airbnb:
+  base_url: "https://community.withairbnb.com"
+  target_forums:
+    - "Help with your business"
+    - "Airbnb updates"
+    - "Community cafe"
+  rate_limits:
+    max_posts_per_day: 2
+    min_hours_between_posts: 4
+    check_interval_minutes: 10
+  keywords:
+    - "problem"
+    - "issue"
+    - "question"
+    - "help"
+    - "support"
+    - "trouble"
+    - "error"
+    - "payout"
+    - "commission"
+    - "booking"
+    - "review"
+    - "payment"
+    - "account"
+    - "listing"
+    - "guest"
+    - "host"
+    - "reservation"
+    - "cancel"
+    - "refund"
+    - "banned"
+    - "suspended"
+    - "discrimination"
+    - "complaint"
+
 # API Configuration
 api:
   openai:
