@@ -17,35 +17,16 @@ load_dotenv()
 logging.basicConfig(level=Config.LOG_LEVEL, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger(__name__)
 
-# --- New High-Precision Filtering Logic ---
-
-# Context keywords identify the post as being from a vendor or about a vendor issue.
+# --- New, More Flexible Filtering Logic ---
+PLATFORM_KEYWORDS = ["gyg", "getyourguide", "viator", "booking.com", "airbnb"]
 CONTEXT_WORDS = [
-    # General Problems & Questions
-    "problem", "issue", "question", "help", "support", "trouble", "error",
+    # General Problems
+    "problem", "issue", "question", "help", "support", "trouble", "error", "app", "website",
     # Vendor Identity
     "supplier", "vendor", "operator", "partner", "guide", "host",
     # Business & Technical Terms
     "payout", "commission", "ranking", "api", "search", "visibility", "fee",
     "account", "listing", "booking", "review", "payment"
-]
-CONTEXT_REGEX = "|".join(CONTEXT_WORDS)
-
-# Compile regex patterns for efficiency.
-# Each pattern requires a platform brand AND a context word.
-BRAND_PATTERNS = [
-    # Matches (GYG or Viator) followed by any of the context words.
-    re.compile(fr"(gyg|get ?your ?guide|viator).*(?:{CONTEXT_REGEX})", re.IGNORECASE),
-    
-    # Matches (Airbnb Experience) followed by any of the context words.
-    re.compile(fr"airbnb (?:experience|experiences).*(?:{CONTEXT_REGEX})", re.IGNORECASE),
-
-    # Matches (Booking.com + Experience/Tour) followed by any of the context words.
-    re.compile(fr"booking\.com.*(?:experience|tour).*(?:{CONTEXT_REGEX})", re.IGNORECASE),
-
-    # Catches cases where the context word appears before the brand.
-    # e.g., "As a supplier, I have a problem with GetYourGuide."
-    re.compile(fr"(?:{CONTEXT_REGEX}).*(gyg|get ?your ?guide|viator|airbnb|booking\.com)", re.IGNORECASE)
 ]
 
 class RedditListener:
@@ -65,15 +46,33 @@ class RedditListener:
         logger.info("Connected to Redis for queuing.")
         logger.info(f"Monitoring subreddits: {', '.join(self.target_subreddits)}")
 
-    def is_relevant(self, text: str) -> bool:
+    def is_relevant(self, title: str, body: str, subreddit: str) -> bool:
         """
-        Check if a post is relevant based on compiled regex patterns.
-        A post is relevant if it matches at least one brand+pain pattern.
+        Check if a post is relevant based on finding at least one PLATFORM
+        keyword and at least one CONTEXT keyword.
         """
-        # The sum() of booleans acts as a counter for matched patterns.
-        hits = sum(bool(p.search(text)) for p in BRAND_PATTERNS)
-        return hits > 0
-    
+        full_text = f"{title} {body}".lower()
+        subreddit_lower = subreddit.lower()
+
+        # 1. Check for a platform mention (in text or implied by subreddit)
+        platform_mentioned = False
+        for p_keyword in PLATFORM_KEYWORDS:
+            if p_keyword in full_text or p_keyword in subreddit_lower:
+                platform_mentioned = True
+                break
+        
+        if not platform_mentioned:
+            return False
+
+        # 2. Check for a vendor context word
+        context_mentioned = False
+        for c_keyword in CONTEXT_WORDS:
+            if c_keyword in full_text:
+                context_mentioned = True
+                break
+        
+        return context_mentioned
+
     async def run(self):
         """Main run loop for the listener, polls for new posts."""
         logger.info("Starting Reddit listener service...")
@@ -93,10 +92,9 @@ class RedditListener:
                     if self.redis.exists(redis_key):
                         continue
 
-                    full_text = f"{post.title} {post.selftext}"
-                    if self.is_relevant(full_text):
+                    if self.is_relevant(post.title, post.selftext, post.subreddit.display_name):
                         relevant_count += 1
-                        logger.info(f"Found relevant post: '{post.title[:50]}...' in r/{post.subreddit.display_name}")
+                        logger.info(f"✅ Found relevant post: '{post.title[:50]}...' in r/{post.subreddit.display_name}")
                         post_data = {
                             'id': post.id,
                             'title': post.title,
