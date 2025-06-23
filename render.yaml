@@ -21,8 +21,8 @@ services:
   - type: worker
     name: listener
     env: python
-    buildCommand: "python3.11 -m pip install -r requirements.txt"
-    startCommand: "python3.11 listener.py"
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python listener.py"
     envVars:
       - key: RENDER_CACHE_CLEAR
         value: "true"
@@ -37,8 +37,8 @@ services:
   - type: worker
     name: reply
     env: python
-    buildCommand: "python3.11 -m pip install -r requirements.txt"
-    startCommand: "python3.11 reply.py"
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python reply.py"
     envVars:
       - key: RENDER_CACHE_CLEAR
         value: "true"
@@ -53,8 +53,8 @@ services:
   - type: worker
     name: poster
     env: python
-    buildCommand: "python3.11 -m pip install -r requirements.txt"
-    startCommand: "python3.11 poster.py"
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python poster.py"
     envVars:
       - key: RENDER_CACHE_CLEAR
         value: "true"
