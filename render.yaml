@@ -21,7 +21,6 @@ services:
   - type: worker
     name: listener
     env: python
-    pythonVersion: "3.11"
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python listener.py"
     envVars:
@@ -38,7 +37,6 @@ services:
   - type: worker
     name: reply
     env: python
-    pythonVersion: "3.11"
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python reply.py"
     envVars:
@@ -55,7 +53,6 @@ services:
   - type: worker
     name: poster
     env: python
-    pythonVersion: "3.11"
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python poster.py"
     envVars:

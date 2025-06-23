@@ -2,8 +2,8 @@ import sqlite3
 import json
 from datetime import datetime
 from config import Config
-import psycopg2
-import psycopg2.pool
+import psycopg
+from psycopg_pool import ConnectionPool
 import os
 import logging
 
@@ -20,7 +20,8 @@ class NeonDB:
             logger.error("NEON_DATABASE_URL is not set. Cannot connect to the database.")
             return
         try:
-            self.pool = psycopg2.pool.SimpleConnectionPool(1, 20, self.db_url)
+            # The modern way to create a connection pool with psycopg3
+            self.pool = ConnectionPool(conninfo=self.db_url, min_size=1, max_size=20)
             logger.info("Successfully connected to Neon database.")
             self.init_database()
         except Exception as e:
@@ -31,8 +32,8 @@ class NeonDB:
         """Initializes the database with the required tables if they don't exist."""
         if not self.pool:
             return
-        conn = self.pool.getconn()
-        try:
+        # Use a context manager for clean connection handling
+        with self.pool.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS reddit_logs (
@@ -47,12 +48,7 @@ class NeonDB:
                         error_message TEXT
                     );
                 """)
-                conn.commit()
-            logger.info("Database initialized (tables created if not exists).")
-        except Exception as e:
-            logger.error(f"Error initializing database: {e}")
-        finally:
-            self.pool.putconn(conn)
+                logger.info("Database initialized (tables created if not exists).")
 
     def log_post(self, post_id, subreddit, title, reply_text, success, comment_url=None, error_message=None):
         """Logs a record of a posted reply to the database."""
@@ -64,33 +60,31 @@ class NeonDB:
             INSERT INTO reddit_logs (post_id, subreddit, title, reply_text, success, comment_url, posted_at, error_message)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
-        conn = self.pool.getconn()
         try:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    insert_query,
-                    (
-                        post_id,
-                        subreddit,
-                        title,
-                        reply_text,
-                        success,
-                        comment_url,
-                        datetime.utcnow(),
-                        error_message
+            # Use a context manager for clean connection handling
+            with self.pool.connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        insert_query,
+                        (
+                            post_id,
+                            subreddit,
+                            title,
+                            reply_text,
+                            success,
+                            comment_url,
+                            datetime.utcnow(),
+                            error_message
+                        )
                     )
-                )
-                conn.commit()
-            logger.info(f"Logged post {post_id} to Neon database.")
+                logger.info(f"Logged post {post_id} to Neon database.")
         except Exception as e:
             logger.error(f"Error logging post {post_id} to Neon: {e}")
-        finally:
-            self.pool.putconn(conn)
 
     def close(self):
         """Closes the database connection pool."""
         if self.pool:
-            self.pool.closeall()
+            self.pool.close()
             logger.info("Neon database connection pool closed.")
 
 def get_db():
