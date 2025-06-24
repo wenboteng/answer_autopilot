@@ -17,24 +17,33 @@ load_dotenv()
 logging.basicConfig(level=Config.LOG_LEVEL, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger(__name__)
 
-# --- More Flexible Filtering Logic with Scoring ---
-PLATFORM_KEYWORDS = [
-    "gyg", "getyourguide", "viator", "bokun", "booking.com", "airbnb", "expedia", "tripadvisor",
-    "klook", "musement", "civitatis", "headout", "tiqets", "kkday", "vrbo", "homeaway", "flipkey",
-    "turo", "getaround", "ota", "online travel", "travel platform", "booking platform"
-]
+# --- Overhauled Listening Filter for Tour Vendors/Operators/Hosts ---
 
-CONTEXT_WORDS = [
-    "tour operator", "tour vendor", "supplier", "vendor", "host", "property manager", "listing",
-    "booking", "commission", "channel manager", "direct booking", "activity provider",
-    "excursion", "short-term rental", "reservation", "payout", "fee", "platform fee", "api",
-    "integration", "partner", "guide", "accommodation provider", "airbnb host", "tourism business"
-]
+# Subreddit weights (for scoring)
+SUBREDDIT_WEIGHTS = {
+    # Core
+    "TourGuide": 15,
+    "TravelIndustry": 15,
+    "AirbnbHosts": 15,
+    "ShortTermRentals": 15,
+    "TravelAgents": 12,
+    # Peripheral
+    "SmallBusiness": 6,
+    "Entrepreneur": 6,
+    "PropertyManagement": 6,
+}
 
-# Subreddits that are highly relevant to tour vendors, operators, and hosts
-TARGET_SUBREDDITS = [
-    "AirbnbHosts", "TravelIndustry", "TourGuide", "PropertyManagement"
-]
+# Subreddits to monitor (must exist and be public)
+TARGET_SUBREDDITS = list(SUBREDDIT_WEIGHTS.keys())
+
+# Platform keywords (regex, case-insensitive)
+PLATFORM_REGEX = re.compile(r"gyg|get\s?your\s?guide|viator\b|booking\.com\b|airbnb\b|airbnb experiences|expedia\b|tripadvisor(\s+experiences)?|klook\b|musement\b|civitatis\b|headout\b|tiqets\b|kkday\b|vrbo\b|homeaway\b|flipkey\b|turo\b|getaround\b|bokun\b|ota\b|online\s+travel|tour(s)?bylocals|gowithguide|tourradar|trip\.com|agoda\b", re.I)
+
+# Vendor-side context keywords (regex, case-insensitive)
+CONTEXT_REGEX = re.compile(r"(operator|supplier|vendor|host|guide|activity\s+(provider|operator)|tour\s+(operator|business)|experience\s+(provider|host)|listing|inventory|channel\s+manager|commission|payout|net\s+rate|platform\s+fee|integration|api|dashboard|management\s+center|direct\s+booking|ranking|availability|extranet|partner\s+portal|supplier\s+api|property\s+manager|short[-\s]term\s+rental|reservation)", re.I)
+
+# Negative keywords (regex, case-insensitive)
+NEGATIVE_REGEX = re.compile(r"(scammed|refund(ed)?|cancellation\s+policy|trip\s+(report|review)|honeymoon|travel\s+tips|packing\s+list|lost\s+luggage)", re.I)
 
 class RedditListener:
     def __init__(self):
@@ -53,51 +62,50 @@ class RedditListener:
         logger.info("Connected to Redis for queuing.")
         logger.info(f"Monitoring subreddits: {', '.join(self.target_subreddits)}")
 
-    def calculate_relevance_score(self, title: str, body: str, subreddit: str) -> float:
+    def calculate_relevance_score(self, title: str, body: str, subreddit: str, author_flair: str = None) -> float:
         """
-        Calculate a relevance score (0-100) based on keyword matches.
-        Higher score = more relevant.
+        Calculate a relevance score using regex-based matching, subreddit weights, and new scoring logic.
         """
-        full_text = f"{title} {body}".lower()
-        subreddit_lower = subreddit.lower()
+        text = f"{title} {body}".lower()
+        sub = subreddit.strip()
         score = 0.0
-        platform_matches = 0
-        context_matches = 0
-        for keyword in PLATFORM_KEYWORDS:
-            if keyword in full_text or keyword in subreddit_lower:
-                platform_matches += 1
-                score += 10.0
-        for keyword in CONTEXT_WORDS:
-            if keyword in full_text:
-                context_matches += 1
-                score += 5.0
-        # Require at least one platform and one context keyword
-        if platform_matches > 0 and context_matches > 0:
-            score += 20.0
-        else:
-            score = 0.0  # Not relevant if both not present
-        # Bonus for multiple matches
-        if platform_matches > 1:
-            score += 10.0
-        if context_matches > 1:
-            score += 5.0
-        # Subreddit-specific bonus
-        if any(ota_term in subreddit_lower for ota_term in ["tour", "airbnb", "host", "operator"]):
-            score += 5.0
-        # Length bonus
-        if len(full_text) > 200:
-            score += 5.0
-        return min(score, 100.0)
+        # Platform keyword
+        platform_match = PLATFORM_REGEX.search(text)
+        if platform_match:
+            score += 25
+        # Context keyword(s)
+        context_matches = CONTEXT_REGEX.findall(text)
+        if context_matches:
+            score += 25
+            # Extra context keywords
+            if len(context_matches) > 1:
+                score += 5 * (len(context_matches) - 1)
+        # Subreddit weight
+        score += SUBREDDIT_WEIGHTS.get(sub, 0)
+        # Post length bonus
+        if len(text.split()) > 150:
+            score += 5
+        # Author flair bonus
+        if author_flair and re.search(r"host|operator|guide|supplier|manager", author_flair, re.I):
+            score += 10
+        # Negative keyword penalty
+        negative_match = NEGATIVE_REGEX.search(text)
+        if negative_match and not context_matches:
+            score -= 20
+        # Proximity bonus (platform & context within 12 tokens)
+        if platform_match and context_matches:
+            platform_idx = platform_match.start()
+            context_idx = text.find(context_matches[0][0]) if isinstance(context_matches[0], tuple) else text.find(context_matches[0])
+            if abs(platform_idx - context_idx) < 60:  # ~12 tokens
+                score += 10
+        return score
 
-    def is_relevant(self, title: str, body: str, subreddit: str) -> bool:
-        """
-        Only consider a post relevant if it matches both a platform and a context keyword, and has a higher threshold.
-        """
-        score = self.calculate_relevance_score(title, body, subreddit)
-        threshold = 40.0  # Stricter threshold for relevance
+    def is_relevant(self, title: str, body: str, subreddit: str, author_flair: str = None) -> bool:
+        score = self.calculate_relevance_score(title, body, subreddit, author_flair)
+        threshold = 45.0
         is_relevant = score >= threshold
         if is_relevant:
-            logger.debug(f"Post scored {score:.1f}/100: '{title[:50]}...'")
+            logger.debug(f"Post scored {score:.1f}/100: '{title[:50]}...' (sub: {subreddit})")
         return is_relevant
 
     async def run(self):
@@ -112,7 +120,6 @@ class RedditListener:
                 post_count = 0
                 relevant_count = 0
 
-                # Increased limit to check more posts
                 async for post in subreddit.new(limit=50):
                     post_count += 1
                     redis_key = f"processed_post:{post.id}"
@@ -120,9 +127,11 @@ class RedditListener:
                     if self.redis.exists(redis_key):
                         continue
 
-                    if self.is_relevant(post.title, post.selftext, post.subreddit.display_name):
+                    # Use author_flair_text if available
+                    flair = getattr(post, 'author_flair_text', None)
+                    if self.is_relevant(post.title, post.selftext, post.subreddit.display_name, flair):
+                        score = self.calculate_relevance_score(post.title, post.selftext, post.subreddit.display_name, flair)
                         relevant_count += 1
-                        score = self.calculate_relevance_score(post.title, post.selftext, post.subreddit.display_name)
                         logger.info(f"✅ Found relevant post (score: {score:.1f}): '{post.title[:50]}...' in r/{post.subreddit.display_name}")
                         post_data = {
                             'id': post.id,
@@ -135,13 +144,9 @@ class RedditListener:
                         }
                         self.redis.lpush("posts_to_reply", json.dumps(post_data))
                         logger.info(f"Queued post {post.id} for reply generation.")
-                    
-                    # Mark post as processed with a 7-day expiry to keep Redis clean
                     self.redis.set(redis_key, 1, ex=int(timedelta(days=7).total_seconds()))
 
                 logger.info(f"Finished check. Processed {post_count} posts, found {relevant_count} relevant.")
-                
-                # Reduced wait time to check more frequently
                 logger.info("Sleeping for 3 minutes...")
                 await asyncio.sleep(180)
 
