@@ -96,7 +96,7 @@ safety:
 
 # Tool Configuration
 tool:
-  url: "https://gygsearch.io"
+  url: "https://otaanswers.com"
   utm_source: "reddit"
   utm_medium: "comment"
   utm_campaign: "helpbot" 
