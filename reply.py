@@ -132,7 +132,11 @@ async def process_reply_queue():
             if not post_data:
                 break
             
-            post = json.loads(post_data)
+            # Ensure post_data is a dict
+            if isinstance(post_data, str):
+                post = json.loads(post_data)
+            else:
+                post = post_data
             
             # Generate reply
             post_text = f"{post['title']} {post['content']}"
@@ -150,10 +154,10 @@ async def process_reply_queue():
                     reply_text = reply_text.replace(config['tool']['url'], config['tool']['url'] + utm_params)
                     
                     # Queue for posting
-                    post_data['reply_text'] = reply_text
-                    post_data['generated_at'] = datetime.now().isoformat()
+                    post['reply_text'] = reply_text
+                    post['generated_at'] = datetime.now().isoformat()
                     
-                    redis_client.lpush("posts_to_post", json.dumps(post_data))
+                    redis_client.lpush("posts_to_post", json.dumps(post))
                     logger.info(f"Queued reply for post {post['id']}")
                 else:
                     logger.warning(f"Reply flagged by content moderation for post {post['id']}")
