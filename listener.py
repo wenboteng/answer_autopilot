@@ -33,8 +33,7 @@ CONTEXT_WORDS = [
 
 # Subreddits that are highly relevant to tour vendors, operators, and hosts
 TARGET_SUBREDDITS = [
-    "TourOperators", "Tourism", "AirbnbHosts", "HostAdvice", "TravelIndustry",
-    "SmallTourOperators", "PropertyManagement", "ShortTermRentals", "TourGuide"
+    "AirbnbHosts", "TravelIndustry", "TourGuide", "PropertyManagement"
 ]
 
 class RedditListener:
