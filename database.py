@@ -6,6 +6,7 @@ import psycopg
 from psycopg_pool import ConnectionPool
 import os
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -20,13 +21,18 @@ class NeonDB:
             logger.error("NEON_DATABASE_URL is not set. Cannot connect to the database.")
             return
         try:
-            # The modern way to create a connection pool with psycopg3
             self.pool = ConnectionPool(conninfo=self.db_url, min_size=1, max_size=20)
             logger.info("Successfully connected to Neon database.")
             self.init_database()
         except Exception as e:
             logger.error(f"Failed to connect to Neon database: {e}")
             self.pool = None
+
+    def reconnect(self):
+        """Reconnects the connection pool."""
+        logger.warning("Reconnecting to Neon database...")
+        self.close()
+        self.connect()
 
     def init_database(self):
         """Initializes the database with the required tables if they don't exist."""
@@ -50,36 +56,44 @@ class NeonDB:
                 """)
                 logger.info("Database initialized (tables created if not exists).")
 
-    def log_post(self, post_id, subreddit, title, reply_text, success, comment_url=None, error_message=None):
-        """Logs a record of a posted reply to the database."""
+    def log_post(self, post_id, subreddit, title, reply_text, success, comment_url=None, error_message=None, max_retries=2):
+        """Logs a record of a posted reply to the database, with retry on connection failure."""
         if not self.pool:
             logger.warning("No database connection. Skipping log.")
             return
-        
         insert_query = """
             INSERT INTO reddit_logs (post_id, subreddit, title, reply_text, success, comment_url, posted_at, error_message)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
-        try:
-            # Use a context manager for clean connection handling
-            with self.pool.connection() as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute(
-                        insert_query,
-                        (
-                            post_id,
-                            subreddit,
-                            title,
-                            reply_text,
-                            success,
-                            comment_url,
-                            datetime.utcnow(),
-                            error_message
+        attempt = 0
+        while attempt <= max_retries:
+            try:
+                with self.pool.connection() as conn:
+                    with conn.cursor() as cursor:
+                        cursor.execute(
+                            insert_query,
+                            (
+                                post_id,
+                                subreddit,
+                                title,
+                                reply_text,
+                                success,
+                                comment_url,
+                                datetime.utcnow(),
+                                error_message
+                            )
                         )
-                    )
-                logger.info(f"Logged post {post_id} to Neon database.")
-        except Exception as e:
-            logger.error(f"Error logging post {post_id} to Neon: {e}")
+                    logger.info(f"Logged post {post_id} to Neon database.")
+                return
+            except Exception as e:
+                logger.error(f"Error logging post {post_id} to Neon (attempt {attempt+1}): {e}")
+                if attempt < max_retries:
+                    self.reconnect()
+                    time.sleep(1)
+                    attempt += 1
+                else:
+                    logger.error(f"Failed to log post {post_id} after {max_retries+1} attempts.")
+                    return
 
     def close(self):
         """Closes the database connection pool."""
