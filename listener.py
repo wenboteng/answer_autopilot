@@ -19,51 +19,22 @@ logger = logging.getLogger(__name__)
 
 # --- More Flexible Filtering Logic with Scoring ---
 PLATFORM_KEYWORDS = [
-    # OTA Platforms
-    "gyg", "getyourguide", "viator", "booking.com", "airbnb", "expedia", "tripadvisor",
-    "kayak", "hotels.com", "vrbo", "homeaway", "flipkey", "turo", "getaround",
-    # Travel Platforms
-    "klook", "musement", "civitatis", "headout", "tiqets", "klook", "kkday",
-    # Generic terms
-    "ota", "online travel", "travel platform", "booking platform"
+    "gyg", "getyourguide", "viator", "bokun", "booking.com", "airbnb", "expedia", "tripadvisor",
+    "klook", "musement", "civitatis", "headout", "tiqets", "kkday", "vrbo", "homeaway", "flipkey",
+    "turo", "getaround", "ota", "online travel", "travel platform", "booking platform"
 ]
 
 CONTEXT_WORDS = [
-    # General Problems & Questions
-    "problem", "issue", "question", "help", "support", "trouble", "error", "app", "website",
-    "how", "what", "why", "when", "where", "advice", "suggestion", "recommendation",
-    
-    # Business Terms
-    "payout", "commission", "ranking", "api", "search", "visibility", "fee", "revenue",
-    "account", "listing", "booking", "review", "payment", "earnings", "income",
-    
-    # Vendor/Supplier Terms
-    "supplier", "vendor", "operator", "partner", "guide", "host", "property owner",
-    "tour operator", "activity provider", "accommodation provider",
-    
-    # Customer Service
-    "customer", "guest", "traveler", "tourist", "visitor", "client",
-    "service", "experience", "trip", "tour", "activity", "excursion",
-    
-    # Technical Issues
-    "bug", "glitch", "crash", "loading", "slow", "broken", "not working",
-    "update", "sync", "integration", "connection", "login", "password",
-    
-    # Business Operations
-    "marketing", "advertising", "promotion", "sales", "conversion", "leads",
-    "pricing", "cost", "expense", "profit", "loss", "budget",
-    
-    # Travel Industry Terms
-    "tourism", "travel", "vacation", "holiday", "destination", "attraction",
-    "hotel", "resort", "apartment", "house", "room", "accommodation"
+    "tour operator", "tour vendor", "supplier", "vendor", "host", "property manager", "listing",
+    "booking", "commission", "channel manager", "direct booking", "activity provider",
+    "excursion", "short-term rental", "reservation", "payout", "fee", "platform fee", "api",
+    "integration", "partner", "guide", "accommodation provider", "airbnb host", "tourism business"
 ]
 
-# Subreddits that are more likely to have OTA-related content
+# Subreddits that are highly relevant to tour vendors, operators, and hosts
 TARGET_SUBREDDITS = [
-    "TourGuide", "AirbnbHosts", "TravelIndustry", "Arival", "tour_operator",
-    "SmallBusiness", "Entrepreneur", "DigitalMarketing", "SEO", "Marketing",
-    "Travel", "SoloTravel", "Backpacking", "Hosting", "PropertyManagement",
-    "CustomerService", "Business", "Startups", "Freelance", "SideHustle"
+    "TourOperators", "Tourism", "AirbnbHosts", "HostAdvice", "TravelIndustry",
+    "SmallTourOperators", "PropertyManagement", "ShortTermRentals", "TourGuide"
 ]
 
 class RedditListener:
@@ -75,7 +46,7 @@ class RedditListener:
             refresh_token=Config.REDDIT_REFRESH_TOKEN,
             user_agent=Config.REDDIT_USER_AGENT
         )
-        self.target_subreddits = TARGET_SUBREDDITS  # Use expanded list
+        self.target_subreddits = TARGET_SUBREDDITS
         self.redis = redis.Redis.from_url(
             os.getenv('REDIS_URL', 'redis://localhost:6379'),
             decode_responses=True
@@ -90,59 +61,44 @@ class RedditListener:
         """
         full_text = f"{title} {body}".lower()
         subreddit_lower = subreddit.lower()
-        
         score = 0.0
-        
-        # Platform keywords are weighted heavily (10 points each)
         platform_matches = 0
+        context_matches = 0
         for keyword in PLATFORM_KEYWORDS:
             if keyword in full_text or keyword in subreddit_lower:
                 platform_matches += 1
                 score += 10.0
-        
-        # Context keywords are weighted moderately (3 points each)
-        context_matches = 0
         for keyword in CONTEXT_WORDS:
             if keyword in full_text:
                 context_matches += 1
-                score += 3.0
-        
-        # Bonus for having both platform and context keywords
+                score += 5.0
+        # Require at least one platform and one context keyword
         if platform_matches > 0 and context_matches > 0:
             score += 20.0
-        
-        # Bonus for multiple platform mentions
+        else:
+            score = 0.0  # Not relevant if both not present
+        # Bonus for multiple matches
         if platform_matches > 1:
-            score += 15.0
-        
-        # Bonus for multiple context mentions
-        if context_matches > 2:
             score += 10.0
-        
-        # Subreddit-specific bonuses
-        if any(ota_term in subreddit_lower for ota_term in ["tour", "travel", "airbnb", "hosting"]):
+        if context_matches > 1:
             score += 5.0
-        
-        # Length bonus (longer posts might be more detailed)
+        # Subreddit-specific bonus
+        if any(ota_term in subreddit_lower for ota_term in ["tour", "airbnb", "host", "operator"]):
+            score += 5.0
+        # Length bonus
         if len(full_text) > 200:
             score += 5.0
-        
-        return min(score, 100.0)  # Cap at 100
+        return min(score, 100.0)
 
     def is_relevant(self, title: str, body: str, subreddit: str) -> bool:
         """
-        Check if a post is relevant using a more flexible scoring system.
-        Lower threshold for inclusion.
+        Only consider a post relevant if it matches both a platform and a context keyword, and has a higher threshold.
         """
         score = self.calculate_relevance_score(title, body, subreddit)
-        
-        # Much lower threshold - anything with a reasonable score gets included
-        threshold = 15.0  # Reduced from requiring both platform + context
-        
+        threshold = 40.0  # Stricter threshold for relevance
         is_relevant = score >= threshold
         if is_relevant:
             logger.debug(f"Post scored {score:.1f}/100: '{title[:50]}...'")
-        
         return is_relevant
 
     async def run(self):
