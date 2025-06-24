@@ -26,7 +26,7 @@ services:
     envVars:
       - key: RENDER_CACHE_CLEAR
         value: "true"
-      - fromGroup: reddit-creds
+      - fromGroup: ota-bot-secrets
       - key: REDIS_URL
         fromService:
           type: redis
@@ -42,7 +42,7 @@ services:
     envVars:
       - key: RENDER_CACHE_CLEAR
         value: "true"
-      - fromGroup: reddit-creds
+      - fromGroup: ota-bot-secrets
       - key: REDIS_URL
         fromService:
           type: redis
@@ -58,7 +58,7 @@ services:
     envVars:
       - key: RENDER_CACHE_CLEAR
         value: "true"
-      - fromGroup: reddit-creds
+      - fromGroup: ota-bot-secrets
       - key: REDIS_URL
         fromService:
           type: redis
@@ -93,5 +93,15 @@ envVarGroups:
         value: PXQ83_VBCV02-g8LbqM9SfOjMLARew
       - key: REDDIT_REFRESH_TOKEN
         value: 489705744940-PzmCvyj8v1jCZ8c8zOagWUFHawyYxA
+      - key: REDDIT_USER_AGENT
+        value: "OTA Bot by u/wenboteng"
+      - key: REDDIT_USERNAME
+        value: "wenboteng"
+      - key: REDDIT_PASSWORD
+        value: "your_reddit_password_here"
+      - key: OPENAI_API_KEY
+        value: "your_openai_api_key_here"
+      - key: NEON_DATABASE_URL
+        value: "your_neon_database_url_here"
       - key: PYTHON_VERSION
         value: 3.11.5 
